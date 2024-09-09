@@ -1,6 +1,18 @@
 import numpy as np
 from itertools import product
 
+#i define the value of the cells, based on the number of potential winning possibilities
+TIER1 = [(1,1)]
+TIER2 = [(0,0),
+         (0,2),
+         (2,0),
+         (2,2)]
+TIER3 = [(0,1),
+         (1,0),
+         (1,2),
+         (2,1)]
+
+
 class Game_Manager():
     '''
     class which manages the game and the instances of the objects
@@ -40,11 +52,6 @@ class Game_Manager():
         :param self:
         :return: None
         """
-        grid_status = np.zeros(shape=(3, 3))
-        #making a sum of a neutral grid with the tiles chosen by every player. This way we have a grid withe choices
-        #made by everyone
-        for player in self.players_list:
-            grid_status += player.tiles_chosen
 
         #print the grid
         print ('\n\n\n')
@@ -74,9 +81,13 @@ class Game_Manager():
         :param player: instance of player1 or player2
         :return: boolean value. True if the move is allowed, otherwise False
         """
-        choice: str = input (f'Please, {player.name}, pick your tile\n'
-                               f'(input x,y where x is the row and y is the column chosen):\n\t\t')
-        choice: tuple = tuple([int(item) for item in choice.split(',') if item.isnumeric()])
+        if player.CPU == False:
+            choice: str = input (f'Please, {player.name}, pick your tile\n'
+                                   f'(input x,y where x is the row and y is the column chosen):\n\t\t')
+            choice: tuple = tuple([int(item) for item in choice.split(',') if item.isnumeric()])
+        else:
+            av_squares = self.squares_available()
+            choice = player.CPU_choice(available_squares=av_squares)
         if self.__is_move_valid(choice):
             player.tiles_chosen[choice[0],choice[1]] = 1 if player == self.players_list[0] else 2
             self.__refresh_grid()
@@ -85,7 +96,6 @@ class Game_Manager():
         else:
             print ('++++ Invalid move... +++++')
             return False
-    #TODO 1: CLOSE the choose a tile method
 
     def __is_move_valid(self, square: tuple) -> bool:
         """
@@ -131,18 +141,38 @@ class Game_Manager():
         self.winning_condition = False
         self.__refresh_grid()
 
+    def squares_available(self) -> list:
+        """
+        returns a list of valid choices to pick
+        :return: list of valid choices to pick
+        """
+        player1 = self.players_list[0]
+        player2 = self.players_list[1]
+        p1_left_free = [(item[0], item[1]) for item in zip (np.where(player1.tiles_chosen == 0)[0], np.where(player1.tiles_chosen == 0)[1])]
+        p2_left_free = [(item[0], item[1]) for item in zip (np.where(player2.tiles_chosen == 0)[0], np.where(player2.tiles_chosen == 0)[1])]
+
+        return [value for value in p1_left_free if value in p2_left_free]
+
+
+
 class Player():
+    __player_list = list ()
     """
     object which holds the attributes and methods for the single player
     """
+    def __new__ (cls, player_nr):
+        instance = super().__new__(cls)
+        cls.__player_list.append(instance)
+        return instance
 
     def __init__(self, player_nr: int):
         self.player_nr = player_nr
         self.name = input(f'Please insert name for player-{self.player_nr:02}:\n\t\t')
         self.CPU = False
-        choice = input('Is this player a CPU? (Y/N):\n\t\t')
-        if choice.lower() == 'y' or choice.lower == 'yes':
-            self.CPU = True
+        if self.player_nr == 2:
+            choice = input('Is this player a CPU? (Y/N):\n\t\t')
+            if choice.lower() == 'y' or choice.lower == 'yes':
+                self.CPU = True
         self.tiles_chosen = np.zeros(shape=(3, 3))  #the grid is empty for the moment, no tiles belong to give player
 
     def clean_player(self):
@@ -151,6 +181,96 @@ class Player():
         :return: None
         """
         self.tiles_chosen = np.zeros(shape=(3, 3))
+
+    def print_choice (func, *args, **kwargs):
+        def wrapper (*args, **kwargs):
+            output = func (*args, **kwargs)
+            print (f'{func.__name__} : {output}')
+        return wrapper
+
+    @print_choice
+    def CPU_choice (self, available_squares) -> tuple:
+        """
+        method to pick a square from the remaining and try to win the game
+        :param available_squares: list of available squares
+        :return: tuple containing the square picked
+        """
+        #if the central square has not been taken yet, then the choice must be that one no matter what
+        if ((1,1) in available_squares):
+            return (1,1)
+        winning_square = self.__can_cpu_wins(available_squares = available_squares)
+        if winning_square != None:
+            return winning_square
+        can_the_opponent_win = self.__pick_a_square(available_squares = available_squares):
+        if can_the_opponent_win:
+            return can_the_opponent_win
+        #TODO 1: DEVI SCRIVERE UN METODO PER DETERMINARE UNA MOSSA QUANDO NON CI SONO POSSIBILITà DI VITTORIA PER P1 O CPU E IL QUADRATO 11 è STATO PRESO
+
+    @print_choice
+    def __can_cpu_wins (self, available_squares) -> tuple:
+        """
+        method to check whether the CPU can win with the upcoming move
+        :return: tuple containing the win condition.
+        """
+        for row in range(3):
+            row = self.tiles_chosen[row, :]
+            if row.sum() == 4:
+                chosen_value = (row, np.where (row == 0)[0])
+                if chosen_value in available_squares:
+                    return chosen_value
+        for column in range(3):
+            column = self.tiles_chosen[:, column]
+            if column.sum() == 4:
+                chosen_value = (np.where (column == 0)[0], column)
+                if chosen_value in available_squares:
+                    return chosen_value
+        diagonal_main = self.tiles_chosen.diagonal().sum()
+        if diagonal_main == 4:
+            for tuple in [(0,0), (2,2)]: #for sure it is a square on the corner since the mid one will be kept on the second move at most
+                if tuple in available_squares:
+                    return tuple
+        diagonal_sec = self.tiles_chosen[0, 2] + self.tiles_chosen[1, 1] + self.tiles_chosen[2, 0]
+        if diagonal_sec == 4:
+            for tuple in [(0,2), (2,0)]:
+                return tuple
+        return None
+
+    @print_choice
+    def __can_the_opponent_win(self, available_squares) -> tuple:
+        """
+        method to pick a square from the ones available and with the goal of blocking the opponent's possibilities to win
+        :param available_squares: list of available squares
+        :return: tuple containing the square picked
+        """
+        #since the human player can only be the player1 when a CPU is challenged
+        opponent_squares = self.__player_list[0].tiles_chosen
+
+        for row in range(3):
+            row = opponent_squares[row, :]
+            if row.sum() == 2:
+                chosen_value = (row, np.where (row == 0)[0])
+                if chosen_value in available_squares:
+                    return chosen_value
+        for column in range(3):
+            column = opponent_squares[:, column]
+            if column.sum() == 2:
+                chosen_value = (np.where (column == 0)[0], column)
+                if chosen_value in available_squares:
+                    return chosen_value
+        diagonal_main = opponent_squares.diagonal().sum()
+        if diagonal_main == 2:
+            for tuple in [(0,0), (2,2)]: #for sure it is a square on the corner since the mid one will be kept on the second move at most
+                if tuple in available_squares:
+                    return tuple
+        diagonal_sec = opponent_squares[0, 2] + opponent_squares[1, 1] + opponent_squares[2, 0]
+        if diagonal_sec == 2:
+            for tuple in [(0,2), (2,0)]:
+                return tuple
+        return None
+
+
+
+
 
 
 if __name__ == '__main__':
