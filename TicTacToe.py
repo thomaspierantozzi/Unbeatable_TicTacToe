@@ -212,7 +212,7 @@ class Player():
         #if the central square has not been taken yet, then the choice must be that one no matter what
         if ((1,1) in available_squares):
             return (1,1)
-        winning_square = self.__can_cpu_wins(available_squares = available_squares)
+        winning_square = self.__can_cpu_win(available_squares = available_squares)
         if winning_square != None:
             return winning_square
         can_the_opponent_win = self.__can_the_opponent_win(available_squares = available_squares)
@@ -223,7 +223,7 @@ class Player():
         return self.__pick_a_square(available_squares = available_squares)
 
     @print_choice
-    def __can_cpu_wins (self, available_squares) -> tuple:
+    def __can_cpu_win (self, available_squares) -> tuple:
         """
         method to check whether the CPU can win with the upcoming move
         :return: tuple containing the win condition.
@@ -247,7 +247,10 @@ class Player():
                     return tuple
         diagonal_sec = self.tiles_chosen[0, 2] + self.tiles_chosen[1, 1] + self.tiles_chosen[2, 0]
         if diagonal_sec == 4:
-            return (0,2) if self.tiles_chosen[0, 2] == 0 else (2,0)
+            if self.tiles_chosen[0, 2] == 0 and (0, 2) in available_squares:
+                return (0,2)
+            elif self.tiles_chosen[2, 0] == 0 and (2, 0) in available_squares:
+                return (2,0)
         return None
 
     @print_choice
@@ -287,15 +290,18 @@ class Player():
     @print_choice
     def __pick_a_square(self, available_squares) -> tuple:
         '''
-        This method covers only the first move. Since only on the first turn up to the CPU there are no ways to win with
-        an upcoming move.
         It chooses one of the 4 corners since these are the squares most valuable after the central one (which is selected
         as a first move in case the opponent should leave it unchosen on the opening pick)
+        if the corners are not available and there is no way for the opponent nor the CPU to win (this method is call afterwards),
+        then it returns a random choice amongst the ones still in 'available_squares'
+        :param available_squares: list of available squares
         :return : tuple containing the square picked
         '''
-
-        list_of_choices = [item for item in TIER2 if item in available_squares]
-        return choice(list_of_choices)
+        try:
+            list_of_choices = [item for item in TIER2 if item in available_squares]
+            return choice(list_of_choices)
+        except IndexError:
+            return choice(available_squares)
 
 
 if __name__ == '__main__':
